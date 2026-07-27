@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Рендер кликов макроса</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#0f0f17;
+    --surface:#191924;
+    --surface2:#21212f;
+    --line:#31313f;
+    --text:#eae8f2;
+    --muted:#8d8aa2;
+    --p1:#4fd8c4;
+    --p1-dim:#2a5a53;
+    --p2:#ef6fa8;
+    --p2-dim:#5c2f45;
+    --warn:#f2b84b;
+    --danger:#e6607a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    padding:24px 16px 64px;
+  }
+  .wrap{max-width:760px;margin:0 auto;}
+  header{margin-bottom:28px;}
+  h1{
+    font-family:'Chakra Petch',sans-serif;
+    font-weight:700;
+    font-size:26px;
+    margin:0 0 6px;
+    letter-spacing:.3px;
+    display:flex;align-items:baseline;gap:10px;
+  }
+  h1 .p1dot{color:var(--p1)}
+  h1 .p2dot{color:var(--p2)}
+  header p{margin:0;color:var(--muted);font-size:14px;line-height:1.5;}
+
+  .step{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:18px 18px 20px;
+    margin-bottom:16px;
+  }
+  .step-head{
+    display:flex;align-items:center;gap:10px;margin-bottom:14px;
+  }
+  .step-num{
+    font-family:'Space Mono',monospace;
+    font-size:12px;
+    color:var(--bg);
+    background:var(--text);
+    width:22px;height:22px;border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .step-title{
+    font-family:'Chakra Petch',sans-serif;
+    font-weight:600;
+    font-size:15px;
+  }
+  .step-sub{color:var(--muted);font-size:12.5px;margin:2px 0 0 32px;}
+
+  .dropzone{
+    border:1.5px dashed var(--line);
+    border-radius:10px;
+    padding:22px;
+    text-align:center;
+    cursor:pointer;
+    transition:.15s border-color, .15s background;
+  }
+  .dropzone:hover{border-color:var(--p1);background:var(--surface2);}
+  .dropzone.filled{border-color:var(--p1);background:var(--surface2);}
+  .dropzone input{display:none;}
+  .dz-label{font-size:13.5px;color:var(--text);}
+  .dz-hint{font-size:11.5px;color:var(--muted);margin-top:4px;}
+
+  .status{font-size:12.5px;margin-top:10px;font-family:'Space Mono',monospace;}
+  .status.err{color:var(--danger);}
+  .status.ok{color:var(--p1);}
+  .status.warn{color:var(--warn);}
+
+  canvas#timeline{
+    width:100%;height:110px;
+    display:block;border-radius:8px;
+    background:var(--surface2);
+    margin-top:14px;
+    border:1px solid var(--line);
+  }
+  .legend{display:flex;gap:16px;margin-top:8px;font-size:11.5px;color:var(--muted);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:10px;height:10px;border-radius:2px;display:inline-block;}
+
+  .adjust-row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center;}
+  .adjust-row label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px;}
+  select,input[type=number]{
+    background:var(--surface2);border:1px solid var(--line);color:var(--text);
+    border-radius:7px;padding:7px 8px;font-family:'Space Mono',monospace;font-size:12.5px;
+  }
+
+  .pools{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media (max-width:520px){.pools{grid-template-columns:1fr;}}
+  .pool{
+    border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--surface2);
+  }
+  .pool h4{margin:0 0 8px;font-size:13px;font-family:'Chakra Petch',sans-serif;display:flex;align-items:center;gap:7px;}
+  .pool .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .pool ul{list-style:none;margin:8px 0 0;padding:0;max-height:110px;overflow-y:auto;}
+  .pool li{
+    font-size:11.5px;color:var(--muted);display:flex;justify-content:space-between;
+    gap:6px;padding:3px 0;border-bottom:1px solid var(--line);
+  }
+  .pool li button{
+    background:none;border:none;color:var(--danger);cursor:pointer;font-size:11px;padding:0;
+  }
+  .pool .addbtn{
+    font-size:11.5px;color:var(--text);background:var(--surface);border:1px solid var(--line);
+    border-radius:6px;padding:5px 9px;cursor:pointer;
+  }
+  .pool .addbtn:hover{border-color:var(--p1);}
+  .pool input[type=file]{display:none;}
+  .pool .empty-note{font-size:11px;color:var(--muted);margin-top:6px;font-style:italic;}
+
+  .settings-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+  @media (max-width:520px){.settings-grid{grid-template-columns:1fr;}}
+  .field{display:flex;flex-direction:column;gap:6px;}
+  .field label{font-size:12px;color:var(--muted);}
+  .field .row{display:flex;align-items:center;gap:8px;}
+  input[type=range]{flex:1;accent-color:var(--p1);}
+  .field output{font-family:'Space Mono',monospace;font-size:11.5px;color:var(--text);width:42px;text-align:right;}
+  input[type=checkbox]{accent-color:var(--p1);width:15px;height:15px;}
+
+  .render-bar{
+    display:flex;flex-direction:column;align-items:stretch;gap:12px;
+  }
+  button.render{
+    font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:15px;letter-spacing:.4px;
+    background:linear-gradient(90deg,var(--p1),var(--p2));
+    color:#0f0f17;border:none;border-radius:10px;padding:14px 0;cursor:pointer;
+    transition:.15s transform, .15s filter;
+  }
+  button.render:hover:not(:disabled){filter:brightness(1.08);}
+  button.render:active:not(:disabled){transform:scale(.99);}
+  button.render:disabled{opacity:.45;cursor:not-allowed;}
+
+  .result{display:flex;flex-direction:column;gap:10px;}
+  .result audio{width:100%;}
+  a.download{
+    text-align:center;font-family:'Space Mono',monospace;font-size:12.5px;
+    background:var(--surface2);border:1px solid var(--p1);color:var(--p1);
+    border-radius:8px;padding:10px;text-decoration:none;
+  }
+  a.download:hover{background:var(--p1);color:#0f0f17;}
+
+  footer{margin-top:20px;color:var(--muted);font-size:11px;line-height:1.6;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1><span class="p1dot">●</span>Рендер кликов<span class="p2dot">●</span></h1>
+    <p>Загружаете макрос уровня → назначаете звуки кликов для P1/P2 → получаете готовый mp3/wav с кликботом для записи левела.</p>
+  </header>
+
+  <!-- STEP 1: MACRO -->
+  <div class="step">
+    <div class="step-head">
+      <div class="step-num">1</div>
+      <div class="step-title">Макрос</div>
+    </div>
+    <div class="step-sub" style="margin-bottom:10px;">Поддерживаются: GDReplayFormat 2 (.gdr2, бинарный), GDReplayFormat 1 (.gdr, MessagePack) и JSON-макросы (frame+p1/p2, player+down и т.п.). Формат определяется автоматически по содержимому файла, а не по расширению.</div>
+
+    <div class="dropzone" id="dzMacro">
+      <input type="file" id="macroInput" accept=".json,.gdr,.gdr2,.txt,*">
+      <div class="dz-label" id="dzMacroLabel">Нажмите, чтобы выбрать файл макроса</div>
+      <div class="dz-hint">.json / .gdr / .gdr2</div>
+    </div>
+    <div class="status" id="macroStatus"></div>
+
+    <canvas id="timeline" style="display:none;"></canvas>
+    <div class="legend" id="legend" style="display:none;">
+      <span><span class="sw" style="background:var(--p1)"></span>Player 1</span>
+      <span><span class="sw" style="background:var(--p2)"></span>Player 2</span>
+      <span id="clickCount"></span>
+    </div>
+
+    <div class="adjust-row" id="unitRow" style="display:none;">
+      <label>Единицы времени
+        <select id="timeUnit">
+          <option value="frames">Кадры (frame)</option>
+          <option value="ms">Миллисекунды</option>
+          <option value="s">Секунды</option>
+        </select>
+      </label>
+      <label>FPS уровня
+        <input type="number" id="fpsInput" value="240" min="30" max="1000" style="width:70px;">
+      </label>
+      <label>&nbsp;
+        <button class="pool addbtn" id="recalcBtn" style="padding:8px 12px;">Пересчитать</button>
+      </label>
+    </div>
+  </div>
+
+  <!-- STEP 2: SOUNDS -->
+  <div class="step">
+    <div class="step-head">
+      <div class="step-num">2</div>
+      <div class="step-title">Звуки кликов</div>
+    </div>
+    <div class="step-sub" style="margin-bottom:10px;">Загрузите свои сэмплы для каждой категории (можно несколько — для рандомизации, как в ZCB). Если ничего не загружено — используется синтезированный клик.</div>
+
+    <div class="dropzone" id="dzZip" style="margin-bottom:14px;">
+      <input type="file" id="zipInput" accept=".zip">
+      <div class="dz-label" id="dzZipLabel">Импортировать клик-пак ClickpackDB (.zip)</div>
+      <div class="dz-hint">Сам разложит сэмплы по категориям — hard/soft/microclick → нажатия, release → отпускания, player1/player2 — по игрокам (если папок player нет, звуки достанутся обоим)</div>
+    </div>
+    <div class="status" id="zipStatus"></div>
+
+    <div class="pools" id="pools"></div>
+    <button class="addbtn" id="clearAllBtn" style="margin-top:12px;">Очистить все звуки</button>
+  </div>
+
+  <!-- STEP 3: SETTINGS -->
+  <div class="step">
+    <div class="step-head">
+      <div class="step-num">3</div>
+      <div class="step-title">Настройки рендера</div>
+    </div>
+
+    <div class="settings-grid">
+      <div class="field">
+        <label>Громкость P1</label>
+        <div class="row"><input type="range" id="volP1" min="0" max="1.5" step="0.01" value="1"><output id="outVolP1">1.00</output></div>
+      </div>
+      <div class="field">
+        <label>Громкость P2</label>
+        <div class="row"><input type="range" id="volP2" min="0" max="1.5" step="0.01" value="1"><output id="outVolP2">1.00</output></div>
+      </div>
+      <div class="field">
+        <label>Общая громкость</label>
+        <div class="row"><input type="range" id="volMaster" min="0" max="1.5" step="0.01" value="0.9"><output id="outVolMaster">0.90</output></div>
+      </div>
+      <div class="field">
+        <label>Хвост после последнего клика (сек)</label>
+        <input type="number" id="tailSec" value="1.5" min="0" max="10" step="0.5">
+      </div>
+      <div class="field">
+        <label class="row" style="cursor:pointer;"><input type="checkbox" id="pitchVarEnabled" checked> Случайный питч для вариативности</label>
+        <div class="row"><input type="range" id="pitchVarAmount" min="0" max="0.2" step="0.01" value="0.06"><output id="outPitchVar">0.06</output></div>
+      </div>
+      <div class="field">
+        <label>Формат файла</label>
+        <select id="outFormat">
+          <option value="mp3">MP3</option>
+          <option value="wav">WAV</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- RENDER -->
+  <div class="step render-bar">
+    <button class="render" id="renderBtn" disabled>Рендерить</button>
+    <div class="status" id="renderStatus"></div>
+    <div class="result" id="resultBox" style="display:none;">
+      <audio id="previewAudio" controls></audio>
+      <a class="download" id="downloadLink" download="clicks.mp3">Скачать файл</a>
+    </div>
+  </div>
+
+  <footer>Всё обрабатывается локально в браузере — файлы никуда не отправляются.</footer>
+</div>
+
+<script>
+/* ---------------- constants ---------------- */
+const CATEGORIES = [
+  {key:'p1push', player:1, type:'push',    label:'P1 — нажатие', color:'var(--p1)'},
+  {key:'p1rel',  player:1, type:'release', label:'P1 — отпускание', color:'var(--p1-dim)'},
+  {key:'p2push', player:2, type:'push',    label:'P2 — нажатие', color:'var(--p2)'},
+  {key:'p2rel',  player:2, type:'release', label:'P2 — отпускание', color:'var(--p2-dim)'},
+];
+const pools = {}; // key -> [{name, buffer}]
+CATEGORIES.forEach(c => pools[c.key] = []);
+
+let rawEntries = null;   // normalized {frameVal, p1?, p2?}[]
+let parsedEvents = null; // {time, player, type}[]
+let macroDuration = 0;
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+/* ---------------- helpers: DOM ---------------- */
+const $ = id => document.getElementById(id);
+function setStatus(el, msg, cls){
+  el.textContent = msg;
+  el.className = 'status' + (cls ? ' '+cls : '');
+}
+
+/* ---------------- STEP 1: macro parsing ---------------- */
+const dzMacro = $('dzMacro');
+dzMacro.addEventListener('click', () => $('macroInput').click());
+$('macroInput').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) handleMacroFile(f);
+});
+
+async function handleMacroFile(file){
+  $('dzMacroLabel').textContent = file.name;
+  dzMacro.classList.add('filled');
+  const statusEl = $('macroStatus');
+  setStatus(statusEl, 'Разбор файла…');
+  try{
+    const arrBuf = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrBuf);
+    let mode = null, detail = '';
+
+    // 1) GDR2: files start with the ASCII magic "GDR"
+    if (bytes.length >= 3 && bytes[0]===0x47 && bytes[1]===0x44 && bytes[2]===0x52){
+      const res = parseGDR2(bytes);
+      rawEntries = gdr2EventsToRawEntries(res.events);
+      $('timeUnit').value = 'frames';
+      if (res.framerate > 0) $('fpsInput').value = res.framerate;
+      mode = 'gdr2';
+      detail = `GDR2 · бот: ${res.botName || '?'} · fps в файле: ${res.framerate || '?'}`;
+    }
+
+    // 2) Plain JSON (covers .json, and .gdr/.gdr2 that are secretly JSON)
+    if (!rawEntries){
+      try{
+        const text = new TextDecoder('utf-8', {fatal:true}).decode(bytes);
+        const json = JSON.parse(text);
+        const entries = findEntries(json);
+        if (entries){ rawEntries = normalizeEntries(entries); mode = 'json'; }
+      }catch(e){ /* not JSON, try next */ }
+    }
+
+    // 3) MessagePack (GDR1 / .gdr uses msgpack-encoded maps)
+    if (!rawEntries){
+      try{
+        const decoded = decodeMsgPack(bytes);
+        const entries = findEntries(decoded);
+        if (entries){ rawEntries = normalizeEntries(entries); mode = 'gdr1'; }
+      }catch(e){ /* not msgpack either */ }
+    }
+
+    if (!rawEntries) throw new Error('Не удалось разобрать файл ни как GDR2, ни как GDR1(msgpack), ни как JSON. Проверьте, что это действительно файл макроса.');
+
+    if (mode !== 'gdr2') guessTimeUnit(rawEntries);
+    $('unitRow').style.display = 'flex';
+    recompute();
+    setStatus(statusEl, `Разобрано (${mode}): ${rawEntries.length} записей. ${detail}`, 'ok');
+  }catch(err){
+    rawEntries = null; parsedEvents = null;
+    $('renderBtn').disabled = true;
+    $('timeline').style.display = 'none';
+    $('legend').style.display = 'none';
+    setStatus(statusEl, err.message, 'err');
+  }
+}
+
+/* ---------------- GDR2 binary parser ---------------- */
+/* Format spec: https://github.com/maxnut/GDReplayFormat (gdr2 branch) */
+function parseGDR2(bytes){
+  let pos = 3; // skip "GDR" magic
+  function u8(){ if (pos>=bytes.length) throw new Error('Файл GDR2 закончился раньше времени — возможно, повреждён.'); return bytes[pos++]; }
+  function readVarint(){ // standard LEB128 unsigned (continuation = high bit)
+    let result = 0, shift = 1, b;
+    do{ b = u8(); result += (b & 0x7F) * shift; shift *= 128; } while (b & 0x80);
+    return result;
+  }
+  function readCString(){
+    const start = pos;
+    while (bytes[pos] !== 0){ pos++; if (pos>bytes.length) throw new Error('Строка в GDR2 без завершающего нуля.'); }
+    const s = new TextDecoder().decode(bytes.slice(start,pos));
+    pos++;
+    return s;
+  }
+  function readBool(){ return u8() !== 0; }
+
+  const version = readVarint();
+  const inputTag = readCString();
+
+  const author = readCString();
+  const description = readCString();
+  const durationFrames = readVarint();
+  const gameVersion = readVarint();
+  const framerate = readVarint();
+  const seed = readVarint();
+  const coins = readVarint();
+  const ldm = readBool();
+  const platformer = readBool();
+  const botName = readCString();
+  const botVersion = readVarint();
+  const levelId = readVarint();
+  const levelName = readCString();
+  const extSize = readVarint();
+  pos += extSize; // skip replay-level extension data, not needed for audio rendering
+
+  const deathCount = readVarint();
+  for (let i=0;i<deathCount;i++) readVarint(); // death frame deltas, unused here
+
+  const inputCount = readVarint();
+  const p1Count = readVarint();
+
+  function readPacked(){
+    let byteIndex = 0, cont = 1, buttonState = 0, delta = 0;
+    while (cont){
+      const b = u8();
+      cont = b & 1;
+      const payload = (b >> 1) & 0x7F;
+      if (byteIndex === 0){
+        buttonState = payload & 1;
+        if (platformer){
+          delta = (payload >> 3) & 0xF;
+        } else {
+          delta = (payload >> 1) & 0x3F;
+        }
+      } else {
+        const shift = platformer ? (4 + 7*(byteIndex-1)) : (6 + 7*(byteIndex-1));
+        delta += ((payload) * Math.pow(2, shift));
+      }
+      byteIndex++;
+    }
+    return {delta, buttonState};
+  }
+
+  const events = [];
+  let frame = 0;
+  for (let i=0;i<inputCount;i++){
+    if (i === p1Count) frame = 0;
+    const {delta, buttonState} = readPacked();
+    frame += delta;
+    const player = i < p1Count ? 1 : 2;
+    events.push({frame, player, type: buttonState ? 'push' : 'release'});
+  }
+  events.sort((a,b) => a.frame - b.frame);
+  return {events, framerate, durationFrames, botName, levelName};
+}
+
+function gdr2EventsToRawEntries(events){
+  return events.map(e => {
+    const o = {frameVal: e.frame};
+    if (e.player === 1) o.p1 = (e.type === 'push'); else o.p2 = (e.type === 'push');
+    return o;
+  }).sort((a,b) => a.frameVal - b.frameVal);
+}
+
+/* ---------------- minimal MessagePack decoder (for GDR1 / .gdr) ---------------- */
+function decodeMsgPack(bytes){
+  let pos = 0;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  function u8(){ return bytes[pos++]; }
+  function readBytes(n){ const b = bytes.slice(pos,pos+n); pos+=n; return b; }
+  function u16(){ const v=dv.getUint16(pos); pos+=2; return v; }
+  function u32(){ const v=dv.getUint32(pos); pos+=4; return v; }
+  function u64(){ const hi=dv.getUint32(pos); const lo=dv.getUint32(pos+4); pos+=8; return hi*4294967296+lo; }
+  function i8(){ const v=dv.getInt8(pos); pos+=1; return v; }
+  function i16(){ const v=dv.getInt16(pos); pos+=2; return v; }
+  function i32(){ const v=dv.getInt32(pos); pos+=4; return v; }
+  function i64(){ const hi=dv.getInt32(pos); const lo=dv.getUint32(pos+4); pos+=8; return hi*4294967296+lo; }
+  function f32(){ const v=dv.getFloat32(pos); pos+=4; return v; }
+  function f64(){ const v=dv.getFloat64(pos); pos+=8; return v; }
+  function str(n){ return new TextDecoder().decode(readBytes(n)); }
+  function readArray(n){ const a=[]; for(let i=0;i<n;i++) a.push(readValue()); return a; }
+  function readMap(n){ const o={}; for(let i=0;i<n;i++){ const k=readValue(); o[k]=readValue(); } return o; }
+  function readValue(){
+    const b = u8();
+    if (b <= 0x7f) return b;
+    if (b >= 0xe0) return b - 256;
+    if ((b & 0xf0) === 0x80) return readMap(b & 0x0f);
+    if ((b & 0xf0) === 0x90) return readArray(b & 0x0f);
+    if ((b & 0xe0) === 0xa0) return str(b & 0x1f);
+    switch(b){
+      case 0xc0: return null;
+      case 0xc2: return false;
+      case 0xc3: return true;
+      case 0xc4: return readBytes(u8());
+      case 0xc5: return readBytes(u16());
+      case 0xc6: return readBytes(u32());
+      case 0xc7: { const n=u8(); pos+=1+n; return null; }
+      case 0xc8: { const n=u16(); pos+=1+n; return null; }
+      case 0xc9: { const n=u32(); pos+=1+n; return null; }
+      case 0xca: return f32();
+      case 0xcb: return f64();
+      case 0xcc: return u8();
+      case 0xcd: return u16();
+      case 0xce: return u32();
+      case 0xcf: return u64();
+      case 0xd0: return i8();
+      case 0xd1: return i16();
+      case 0xd2: return i32();
+      case 0xd3: return i64();
+      case 0xd4: pos+=2; return null;
+      case 0xd5: pos+=3; return null;
+      case 0xd6: pos+=5; return null;
+      case 0xd7: pos+=9; return null;
+      case 0xd8: pos+=17; return null;
+      case 0xd9: return str(u8());
+      case 0xda: return str(u16());
+      case 0xdb: return str(u32());
+      case 0xdc: return readArray(u16());
+      case 0xdd: return readArray(u32());
+      case 0xde: return readMap(u16());
+      case 0xdf: return readMap(u32());
+      default: throw new Error('Не MessagePack (байт 0x'+b.toString(16)+')');
+    }
+  }
+  const result = readValue();
+  return result;
+}
+
+function findEntries(json){
+  if (Array.isArray(json)) return json;
+  if (json && typeof json === 'object'){
+    const keys = Object.keys(json);
+    if (keys.length && keys.every(k => /^\d+$/.test(k))){
+      return keys.map(k => Object.assign({frame:Number(k)}, json[k]));
+    }
+    const candidates = ['events','inputs','frames','data','replay','clicks','actions'];
+    for (const c of candidates){
+      if (Array.isArray(json[c])) return json[c];
+      if (json.macro && Array.isArray(json.macro[c])) return json.macro[c];
+    }
+    for (const k of keys){
+      if (Array.isArray(json[k]) && json[k].length && typeof json[k][0] === 'object') return json[k];
+      if (json[k] && typeof json[k] === 'object' && !Array.isArray(json[k])){
+        for (const k2 of Object.keys(json[k])){
+          if (Array.isArray(json[k][k2]) && json[k][k2].length && typeof json[k][k2][0] === 'object') return json[k][k2];
+        }
+      }
+    }
+  }
+  return null;
+}
+
+const FRAME_KEYS = ['frame','f','tick','ticks','time','t','ms'];
+const P1_KEYS = ['p1','1','x1','a','btn1','button1','down1','click1'];
+const P2_KEYS = ['p2','2','x2','b','btn2','button2','down2','click2'];
+const PLAYER_KEYS = ['player','p','btn','button'];
+const PLAYER2_BOOL_KEYS = ['player2','isplayer2','p2bool','second'];
+const STATE_KEYS = ['down','click','pressed','press','hold','holding','state','value'];
+
+function detectKey(sample, candidates){
+  for (const c of candidates){
+    for (const o of sample){
+      if (!o || typeof o !== 'object') continue;
+      const foundKey = Object.keys(o).find(k => k.toLowerCase() === c);
+      if (foundKey) return foundKey;
+    }
+  }
+  return null;
+}
+
+function normalizeEntries(raw){
+  const sample = raw.slice(0, Math.min(20, raw.length));
+  const frameKey = detectKey(sample, FRAME_KEYS);
+  const p1Key = detectKey(sample, P1_KEYS);
+  const p2Key = detectKey(sample, P2_KEYS);
+  const playerKey = detectKey(sample, PLAYER_KEYS);
+  const player2Key = detectKey(sample, PLAYER2_BOOL_KEYS);
+  const stateKey = detectKey(sample, STATE_KEYS);
+  if (!frameKey) throw new Error('Не найдено поле с номером кадра / временем.');
+
+  const toBool = v => v === true || v === 1 || v === '1' || v === 'true' || v === 'down';
+  const out = [];
+  for (const o of raw){
+    if (!o || typeof o !== 'object') continue;
+    const frameVal = Number(o[frameKey]);
+    if (!isFinite(frameVal)) continue;
+    const entry = {frameVal};
+    if (p1Key && o[p1Key] !== undefined) entry.p1 = toBool(o[p1Key]);
+    if (p2Key && o[p2Key] !== undefined) entry.p2 = toBool(o[p2Key]);
+    if (player2Key && stateKey && o[player2Key] !== undefined && o[stateKey] !== undefined){
+      const st = toBool(o[stateKey]);
+      if (toBool(o[player2Key])) entry.p2 = st; else entry.p1 = st;
+    } else if (playerKey && stateKey && o[playerKey] !== undefined && o[stateKey] !== undefined){
+      const plRaw = String(o[playerKey]).toLowerCase();
+      const pl = plRaw.includes('2') ? 2 : 1;
+      const st = toBool(o[stateKey]);
+      if (pl === 2) entry.p2 = st; else entry.p1 = st;
+    }
+    if (entry.p1 === undefined && entry.p2 === undefined) continue;
+    out.push(entry);
+  }
+  out.sort((a,b) => a.frameVal - b.frameVal);
+  if (!out.length) throw new Error('Не удалось извлечь ни одного события клика из файла.');
+  return out;
+}
+
+function guessTimeUnit(entries){
+  const maxVal = Math.max(...entries.map(e => e.frameVal));
+  if (maxVal > 20000) { $('timeUnit').value = 'ms'; }
+  else { $('timeUnit').value = 'frames'; }
+}
+
+$('recalcBtn').addEventListener('click', recompute);
+
+function recompute(){
+  if (!rawEntries) return;
+  const unit = $('timeUnit').value;
+  const fps = Number($('fpsInput').value) || 240;
+  parsedEvents = toEvents(rawEntries, fps, unit);
+  if (!parsedEvents.length){
+    setStatus($('macroStatus'), 'После пересчёта не осталось кликов — проверьте единицы времени.', 'warn');
+    $('renderBtn').disabled = true;
+    return;
+  }
+  macroDuration = parsedEvents[parsedEvents.length-1].time;
+  drawTimeline();
+  $('renderBtn').disabled = false;
+  const p1c = parsedEvents.filter(e=>e.player===1 && e.type==='push').length;
+  const p2c = parsedEvents.filter(e=>e.player===2 && e.type==='push').length;
+  $('clickCount').textContent = `P1: ${p1c} кликов · P2: ${p2c} кликов · длина ${macroDuration.toFixed(1)}с`;
+}
+
+function toEvents(entries, fps, unit){
+  const conv = raw => unit === 'frames' ? raw/fps : unit === 'ms' ? raw/1000 : raw;
+  let last1 = false, last2 = false;
+  const events = [];
+  for (const e of entries){
+    const time = conv(e.frameVal);
+    if (e.p1 !== undefined && e.p1 !== last1){
+      events.push({time, player:1, type: e.p1 ? 'push' : 'release'});
+      last1 = e.p1;
+    }
+    if (e.p2 !== undefined && e.p2 !== last2){
+      events.push({time, player:2, type: e.p2 ? 'push' : 'release'});
+      last2 = e.p2;
+    }
+  }
+  events.sort((a,b) => a.time - b.time);
+  return events;
+}
+
+/* ---------------- timeline visualizer ---------------- */
+const canvas = $('timeline');
+function drawTimeline(){
+  canvas.style.display = 'block';
+  $('legend').style.display = 'flex';
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  const ctx2d = canvas.getContext('2d');
+  ctx2d.scale(dpr,dpr);
+  ctx2d.clearRect(0,0,w,h);
+  ctx2d.strokeStyle = '#31313f';
+  ctx2d.beginPath(); ctx2d.moveTo(0,h/2); ctx2d.lineTo(w,h/2); ctx2d.stroke();
+
+  const dur = Math.max(macroDuration, 0.001);
+  for (const ev of parsedEvents){
+    const x = (ev.time/dur)*w;
+    const isP1 = ev.player === 1;
+    const isPush = ev.type === 'push';
+    ctx2d.strokeStyle = isP1 ? (isPush ? '#4fd8c4' : '#2a5a53') : (isPush ? '#ef6fa8' : '#5c2f45');
+    ctx2d.globalAlpha = isPush ? 0.9 : 0.55;
+    ctx2d.lineWidth = isPush ? 1.4 : 1;
+    ctx2d.beginPath();
+    if (isP1){ ctx2d.moveTo(x, h/2); ctx2d.lineTo(x, h/2 - (h/2-6)); }
+    else { ctx2d.moveTo(x, h/2); ctx2d.lineTo(x, h/2 + (h/2-6)); }
+    ctx2d.stroke();
+  }
+  ctx2d.globalAlpha = 1;
+}
+
+let playheadRAF = null;
+$('previewAudio').addEventListener('play', () => {
+  cancelAnimationFrame(playheadRAF);
+  const audioEl = $('previewAudio');
+  function tick(){
+    drawTimeline();
+    if (audioEl.duration){
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const ctx2d = canvas.getContext('2d');
+      const x = (audioEl.currentTime/audioEl.duration)*w;
+      ctx2d.strokeStyle = '#f2b84b';
+      ctx2d.lineWidth = 1.5;
+      ctx2d.beginPath(); ctx2d.moveTo(x,0); ctx2d.lineTo(x,h); ctx2d.stroke();
+    }
+    if (!audioEl.paused) playheadRAF = requestAnimationFrame(tick);
+  }
+  tick();
+});
+$('previewAudio').addEventListener('pause', () => cancelAnimationFrame(playheadRAF));
+
+/* ---------------- STEP 2: sound pools ---------------- */
+const poolsContainer = $('pools');
+CATEGORIES.forEach(cat => {
+  const div = document.createElement('div');
+  div.className = 'pool';
+  div.innerHTML = `
+    <h4><span class="dot" style="background:${cat.color}"></span>${cat.label}</h4>
+    <input type="file" id="file_${cat.key}" multiple accept="audio/*">
+    <button class="addbtn" id="add_${cat.key}">+ добавить сэмплы</button>
+    <ul id="list_${cat.key}"></ul>
+    <div class="empty-note" id="empty_${cat.key}">Пусто — будет использован синтезированный клик</div>
+  `;
+  poolsContainer.appendChild(div);
+  div.querySelector(`#add_${cat.key}`).addEventListener('click', () => div.querySelector(`#file_${cat.key}`).click());
+  div.querySelector(`#file_${cat.key}`).addEventListener('change', e => addSamples(cat.key, e.target.files));
+});
+
+async function addSamples(key, files){
+  for (const f of files){
+    try{
+      const arrBuf = await f.arrayBuffer();
+      const audioBuf = await audioCtx.decodeAudioData(arrBuf.slice(0));
+      pools[key].push({name: f.name, buffer: audioBuf});
+    }catch(e){
+      console.warn('Не удалось декодировать', f.name, e);
+    }
+  }
+  renderPoolList(key);
+}
+
+function renderPoolList(key){
+  const ul = $('list_'+key);
+  ul.innerHTML = '';
+  pools[key].forEach((s, idx) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${s.name}</span>`;
+    const btn = document.createElement('button');
+    btn.textContent = '✕';
+    btn.addEventListener('click', () => { pools[key].splice(idx,1); renderPoolList(key); });
+    li.appendChild(btn);
+    ul.appendChild(li);
+  });
+  $('empty_'+key).style.display = pools[key].length ? 'none' : 'block';
+}
+
+/* ---------------- clickpack .zip import ---------------- */
+const dzZip = $('dzZip');
+dzZip.addEventListener('click', () => $('zipInput').click());
+$('zipInput').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) handleZipFile(f);
+});
+
+$('clearAllBtn').addEventListener('click', () => {
+  CATEGORIES.forEach(c => { pools[c.key] = []; renderPoolList(c.key); });
+  setStatus($('zipStatus'), '');
+});
+
+const AUDIO_EXT = /\.(wav|mp3|ogg|m4a|flac)$/i;
+
+function classifyZipEntry(path){
+  const lower = path.toLowerCase();
+  const segments = lower.split('/').filter(Boolean);
+  const exactPlayer1 = ['1','p1','player1','player 1','player_1'];
+  const exactPlayer2 = ['2','p2','player2','player 2','player_2'];
+  let player = null;
+  for (const seg of segments){
+    if (exactPlayer1.includes(seg)) player = 1;
+    if (exactPlayer2.includes(seg)) player = 2;
+  }
+  if (!player){
+    if (/player\s*1|(?:^|[^a-z0-9])p1(?![0-9])/.test(lower)) player = 1;
+    else if (/player\s*2|(?:^|[^a-z0-9])p2(?![0-9])/.test(lower)) player = 2;
+  }
+  const isRelease = /release/.test(lower) || segments.some(s => s === 'rel' || s === 'relz');
+  return {player, type: isRelease ? 'release' : 'push'};
+}
+
+async function handleZipFile(file){
+  $('dzZipLabel').textContent = file.name;
+  dzZip.classList.add('filled');
+  const statusEl = $('zipStatus');
+  setStatus(statusEl, 'Разбираю архив…');
+  try{
+    if (typeof JSZip === 'undefined') throw new Error('Не удалось загрузить библиотеку для чтения .zip.');
+    const zip = await JSZip.loadAsync(file);
+    const entries = Object.values(zip.files).filter(e => !e.dir && AUDIO_EXT.test(e.name) && !e.name.includes('__MACOSX'));
+    if (!entries.length) throw new Error('В архиве не нашлось аудиофайлов (.wav/.mp3/.ogg).');
+
+    const counts = {p1push:0, p1rel:0, p2push:0, p2rel:0};
+    let failed = 0;
+
+    for (const entry of entries){
+      const {player, type} = classifyZipEntry(entry.name);
+      let audioBuf;
+      try{
+        const arrBuf = await entry.async('arraybuffer');
+        audioBuf = await audioCtx.decodeAudioData(arrBuf);
+      }catch(e){ failed++; continue; }
+
+      const name = entry.name.split('/').pop();
+      const sample = {name, buffer: audioBuf};
+
+      if (player === 1){
+        pools[type === 'push' ? 'p1push' : 'p1rel'].push(sample);
+        counts[type === 'push' ? 'p1push' : 'p1rel']++;
+      } else if (player === 2){
+        pools[type === 'push' ? 'p2push' : 'p2rel'].push(sample);
+        counts[type === 'push' ? 'p2push' : 'p2rel']++;
+      } else {
+        pools[type === 'push' ? 'p1push' : 'p1rel'].push(sample);
+        pools[type === 'push' ? 'p2push' : 'p2rel'].push(sample);
+        counts[type === 'push' ? 'p1push' : 'p1rel']++;
+        counts[type === 'push' ? 'p2push' : 'p2rel']++;
+      }
+    }
+
+    CATEGORIES.forEach(c => renderPoolList(c.key));
+    const summary = `Добавлено — P1 нажатия: ${counts.p1push}, P1 отпускания: ${counts.p1rel}, P2 нажатия: ${counts.p2push}, P2 отпускания: ${counts.p2rel}` + (failed ? ` (не удалось декодировать: ${failed})` : '');
+    setStatus(statusEl, summary, 'ok');
+  }catch(err){
+    setStatus(statusEl, err.message, 'err');
+  }
+}
+
+/* ---------------- STEP 3: settings live labels ---------------- */
+['volP1','volP2','volMaster','pitchVarAmount'].forEach(id => {
+  const el = $(id);
+  const out = $('out'+id.charAt(0).toUpperCase()+id.slice(1));
+  el.addEventListener('input', () => out.textContent = Number(el.value).toFixed(2));
+});
+
+/* ---------------- synth fallback click ---------------- */
+function synthBuffer(ctxLike, player, type){
+  const sr = ctxLike.sampleRate;
+  const dur = type === 'push' ? 0.045 : 0.035;
+  const len = Math.floor(sr*dur);
+  const buf = ctxLike.createBuffer(1, len, sr);
+  const data = buf.getChannelData(0);
+  const baseFreq = player === 1 ? (type === 'push' ? 1200 : 900) : (type === 'push' ? 750 : 550);
+  for (let i=0;i<len;i++){
+    const t = i/sr;
+    const env = Math.exp(-t*60);
+    const tone = Math.sin(2*Math.PI*baseFreq*t);
+    const noise = (Math.random()*2-1)*0.5;
+    data[i] = env*(tone*0.6+noise*0.4);
+  }
+  return buf;
+}
+
+function poolFor(player, type){
+  const cat = CATEGORIES.find(c => c.player===player && c.type===type);
+  return pools[cat.key];
+}
+
+/* ---------------- render pipeline ---------------- */
+$('renderBtn').addEventListener('click', doRender);
+
+async function doRender(){
+  if (!parsedEvents || !parsedEvents.length) return;
+  const btn = $('renderBtn');
+  const statusEl = $('renderStatus');
+  btn.disabled = true;
+  $('resultBox').style.display = 'none';
+  setStatus(statusEl, 'Рендерю аудио…');
+
+  try{
+    const sr = 44100;
+    const tail = Number($('tailSec').value) || 1;
+    const duration = macroDuration + tail;
+    const offline = new OfflineAudioContext(2, Math.ceil(duration*sr), sr);
+
+    const masterVol = Number($('volMaster').value);
+    const p1Vol = Number($('volP1').value);
+    const p2Vol = Number($('volP2').value);
+    const pitchOn = $('pitchVarEnabled').checked;
+    const pitchAmt = Number($('pitchVarAmount').value);
+
+    for (const ev of parsedEvents){
+      const pool = poolFor(ev.player, ev.type);
+      const buffer = pool.length
+        ? pool[Math.floor(Math.random()*pool.length)].buffer
+        : synthBuffer(offline, ev.player, ev.type);
+
+      const src = offline.createBufferSource();
+      src.buffer = buffer;
+      if (pitchOn){
+        src.playbackRate.value = 1 + (Math.random()*2-1)*pitchAmt;
+      }
+      const gain = offline.createGain();
+      gain.gain.value = (ev.player===1 ? p1Vol : p2Vol) * masterVol;
+      src.connect(gain).connect(offline.destination);
+      src.start(Math.max(0, ev.time));
+    }
+
+    setStatus(statusEl, 'Микширую…');
+    const rendered = await offline.startRendering();
+
+    setStatus(statusEl, 'Кодирую файл…');
+    const format = $('outFormat').value;
+    let blob, ext;
+    if (format === 'mp3' && typeof lamejs !== 'undefined'){
+      blob = encodeMp3(rendered);
+      ext = 'mp3';
+    } else {
+      blob = bufferToWav(rendered);
+      ext = 'wav';
+      if (format === 'mp3') setStatus(statusEl, 'MP3-кодировщик не загрузился — сохранено в WAV.', 'warn');
+    }
+
+    const url = URL.createObjectURL(blob);
+    const audioEl = $('previewAudio');
+    audioEl.src = url;
+    const link = $('downloadLink');
+    link.href = url;
+    link.download = 'clicks.' + ext;
+    $('resultBox').style.display = 'flex';
+    if (format !== 'mp3' || ext === 'mp3') setStatus(statusEl, 'Готово.', 'ok');
+  }catch(err){
+    console.error(err);
+    setStatus(statusEl, 'Ошибка рендера: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function floatTo16(float32Arr){
+  const out = new Int16Array(float32Arr.length);
+  for (let i=0;i<float32Arr.length;i++){
+    let s = Math.max(-1, Math.min(1, float32Arr[i]));
+    out[i] = s < 0 ? s*0x8000 : s*0x7FFF;
+  }
+  return out;
+}
+
+function encodeMp3(audioBuffer){
+  const numChannels = Math.min(audioBuffer.numberOfChannels, 2);
+  const sampleRate = audioBuffer.sampleRate;
+  const encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, 128);
+  const left = floatTo16(audioBuffer.getChannelData(0));
+  const right = numChannels > 1 ? floatTo16(audioBuffer.getChannelData(1)) : null;
+  const blockSize = 1152;
+  const chunks = [];
+  for (let i=0; i<left.length; i+=blockSize){
+    const l = left.subarray(i, i+blockSize);
+    let buf;
+    if (right){
+      const r = right.subarray(i, i+blockSize);
+      buf = encoder.encodeBuffer(l, r);
+    } else {
+      buf = encoder.encodeBuffer(l);
+    }
+    if (buf.length > 0) chunks.push(buf);
+  }
+  const end = encoder.flush();
+  if (end.length > 0) chunks.push(end);
+  return new Blob(chunks, {type:'audio/mp3'});
+}
+
+function bufferToWav(audioBuffer){
+  const numChannels = audioBuffer.numberOfChannels;
+  const sampleRate = audioBuffer.sampleRate;
+  const numFrames = audioBuffer.length;
+  const bytesPerSample = 2;
+  const blockAlign = numChannels*bytesPerSample;
+  const dataSize = numFrames*blockAlign;
+  const buffer = new ArrayBuffer(44+dataSize);
+  const view = new DataView(buffer);
+  function writeStr(offset, str){ for (let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); }
+  writeStr(0,'RIFF'); view.setUint32(4, 36+dataSize, true); writeStr(8,'WAVE');
+  writeStr(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+  view.setUint16(22,numChannels,true); view.setUint32(24,sampleRate,true);
+  view.setUint32(28, sampleRate*blockAlign, true); view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true); writeStr(36,'data'); view.setUint32(40, dataSize, true);
+
+  const channels = [];
+  for (let c=0;c<numChannels;c++) channels.push(audioBuffer.getChannelData(c));
+  let offset = 44;
+  for (let i=0;i<numFrames;i++){
+    for (let c=0;c<numChannels;c++){
+      let s = Math.max(-1, Math.min(1, channels[c][i]));
+      s = s < 0 ? s*0x8000 : s*0x7FFF;
+      view.setInt16(offset, s, true);
+      offset += 2;
+    }
+  }
+  return new Blob([view], {type:'audio/wav'});
+}
+
+window.addEventListener('resize', () => { if (parsedEvents) drawTimeline(); });
+</script>
+</body>
+</html>
